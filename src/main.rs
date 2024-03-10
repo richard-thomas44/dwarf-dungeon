@@ -43,9 +43,9 @@ impl TileType {
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest())) // prevents blurry sprites
         .insert_resource(MapDimensions {
-            map_size: TilemapSize {width: 20, height: 10},
+            map_size: TilemapSize {width: 40, height: 30},
             tile_size: 16.,
         })
         .add_systems(Startup, (((
@@ -60,13 +60,30 @@ fn main() {
         ))
         .run();
 }
-fn initialize(mut commands: Commands, map_dimensions : Res<MapDimensions >) {
+fn initialize(mut commands: Commands,
+              asset_server: Res<AssetServer>,
+              mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
+              map_dimensions : Res<MapDimensions >) {
     info!("Initializing");
+// The tilemap bidirectional map storing a Vector of entity id's and a hashmap to convert id to coordinates
     commands.spawn(Tilemap {tile: Vec::new(),
                                     entity: HashMap::new(),
                                     width: map_dimensions.map_size.width,
                                     height: map_dimensions.map_size.height,
                                 });
+
+// The hero spritesheet
+                       
+    let texture: Handle<Image> = asset_server.load("PixelCrawler1.8/Heroes/Knight/Run/Run-Sheet.png");
+    let layout = TextureAtlasLayout::from_grid(Vec2::splat(64.), 6, 1, None, None);
+    let texture_atlas_layout = texture_atlas_layouts.add(layout);
+    commands.spawn(SpriteSheetBundle {
+        texture: texture.clone(),
+        transform: Transform::from_scale(Vec3::splat(1.0)),
+        atlas: TextureAtlas {layout: texture_atlas_layout, index: 1},
+        ..default()
+        }
+    );
 }
 
 fn spawn_tiles(mut commands: Commands, asset_server: Res<AssetServer>,
@@ -86,7 +103,7 @@ fn spawn_tiles(mut commands: Commands, asset_server: Res<AssetServer>,
     let mut grid = grid_q.get_single_mut().unwrap();
     info!("Grid is {:#?}", grid);
 
-    let tile_scale = 3.;
+    let tile_scale = 1.5;
 
     for j in 0..map_dimensions.map_size.height {
         for i in 0..map_dimensions.map_size.width {
