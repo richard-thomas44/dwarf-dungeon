@@ -41,6 +41,17 @@ impl TileType {
     }
 }
 
+#[derive(Component)]
+struct AnimationIndices {
+    first: usize,
+    last: usize,
+}
+#[derive(Component, Deref, DerefMut)]
+struct AnimationTimer(Timer);
+
+#[derive(Component)]
+struct Player;
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest())) // prevents blurry sprites
@@ -57,6 +68,8 @@ fn main() {
         )          
         .add_systems(Update, (
             bevy::window::close_on_esc,
+//            animate_sprite,
+            move_player,
         ))
         .run();
 }
@@ -73,17 +86,21 @@ fn initialize(mut commands: Commands,
                                 });
 
 // The hero spritesheet
-                       
+
     let texture: Handle<Image> = asset_server.load("PixelCrawler1.8/Heroes/Knight/Run/Run-Sheet.png");
     let layout = TextureAtlasLayout::from_grid(Vec2::splat(64.), 6, 1, None, None);
     let texture_atlas_layout = texture_atlas_layouts.add(layout);
-    commands.spawn(SpriteSheetBundle {
+    let animation_indices = AnimationIndices { first: 1, last: 5 };
+    commands.spawn((SpriteSheetBundle {
         texture: texture.clone(),
         transform: Transform::from_scale(Vec3::splat(1.0)),
         atlas: TextureAtlas {layout: texture_atlas_layout, index: 1},
         ..default()
-        }
-    );
+        },
+        animation_indices,
+        AnimationTimer(Timer::from_seconds(0.1, TimerMode::Repeating)),
+        Player,
+    ));
 }
 
 fn spawn_tiles(mut commands: Commands, asset_server: Res<AssetServer>,
@@ -169,3 +186,37 @@ fn add_ore(mut commands: Commands,
         tile.index = TileType::OreCentre.value();
     };
 }
+
+fn animate_sprite(
+    time: Res<Time>,
+    mut query: Query<(&AnimationIndices, &mut AnimationTimer, &mut TextureAtlas)>,
+) {
+    for (indices, mut timer, mut atlas) in &mut query {
+        timer.tick(time.delta());
+        if timer.just_finished() {
+            atlas.index = if atlas.index == indices.last {
+                indices.first
+            } else {
+                atlas.index + 1
+            };
+        }
+    }
+}
+ 
+fn move_player(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut q: Query<&mut Transform, With<Player>>,
+    mut qa: Query <(&AnimationIndices, &mut TextureAtlas)>,
+    ) {
+        let mut t = q.get_single_mut().unwrap();
+        if keyboard_input.pressed(KeyCode::KeyD) {
+            t.translation.x += 4.;
+            for (indices, mut atlas) in &mut qa {
+                atlas.index = if atlas.index == indices.last {
+                    indices.first
+                } else {
+                    atlas.index + 1
+                };
+            }
+        }
+    }
