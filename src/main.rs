@@ -41,11 +41,6 @@ impl TileType {
     }
 }
 
-#[derive(Component)]
-struct AnimationIndices {
-    first: usize,
-    last: usize,
-}
 #[derive(Component, Deref, DerefMut)]
 struct AnimationTimer(Timer);
 
@@ -69,8 +64,12 @@ fn main() {
         .add_systems(Update, (
             bevy::window::close_on_esc,
 //            animate_sprite,
+
+        ))
+        .add_systems(FixedUpdate,(
             move_player,
         ))
+        .insert_resource(Time::<Fixed>::from_hz(15.))
         .run();
 }
 fn initialize(mut commands: Commands,
@@ -87,17 +86,18 @@ fn initialize(mut commands: Commands,
 
 // The hero spritesheet
 
-    let texture: Handle<Image> = asset_server.load("PixelCrawler1.8/Heroes/Knight/Run/Run-Sheet.png");
-    let layout = TextureAtlasLayout::from_grid(Vec2::splat(64.), 6, 1, None, None);
+    let texture: Handle<Image> = asset_server.load("images/Characters/Knight1_Move.png");
+//    let layout = TextureAtlasLayout::from_grid(Vec2::splat(24.), 4, 8, Some(Vec2::splat(28.)), None);
+    let layout = TextureAtlasLayout::from_grid(Vec2::splat(52.), 4, 8, None, None);    
     let texture_atlas_layout = texture_atlas_layouts.add(layout);
-    let animation_indices = AnimationIndices { first: 1, last: 5 };
+//    let animation_indices = AnimationIndices { first: 7, last: 10 };
     commands.spawn((SpriteSheetBundle {
         texture: texture.clone(),
-        transform: Transform::from_scale(Vec3::splat(1.0)),
+        transform: Transform::from_scale(Vec3::splat(2.0)),
         atlas: TextureAtlas {layout: texture_atlas_layout, index: 1},
         ..default()
         },
-        animation_indices,
+//        animation_indices,
         AnimationTimer(Timer::from_seconds(0.1, TimerMode::Repeating)),
         Player,
     ));
@@ -187,36 +187,52 @@ fn add_ore(mut commands: Commands,
     };
 }
 
-fn animate_sprite(
-    time: Res<Time>,
-    mut query: Query<(&AnimationIndices, &mut AnimationTimer, &mut TextureAtlas)>,
-) {
-    for (indices, mut timer, mut atlas) in &mut query {
-        timer.tick(time.delta());
-        if timer.just_finished() {
-            atlas.index = if atlas.index == indices.last {
-                indices.first
+fn move_player(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut q: Query<&mut Transform, With<Player>>,
+    mut q_atlas: Query <&mut TextureAtlas, With<Player>>,
+    ) {
+        let mut t = q.get_single_mut().unwrap();
+        if keyboard_input.pressed(KeyCode::KeyD) {
+            t.translation.x += 8.;
+            let mut atlas = q_atlas.single_mut();
+            atlas.index = if atlas.index > 11 || atlas.index < 8{
+                8
             } else {
                 atlas.index + 1
             };
         }
-    }
-}
- 
-fn move_player(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut q: Query<&mut Transform, With<Player>>,
-    mut qa: Query <(&AnimationIndices, &mut TextureAtlas)>,
-    ) {
-        let mut t = q.get_single_mut().unwrap();
-        if keyboard_input.pressed(KeyCode::KeyD) {
-            t.translation.x += 4.;
-            for (indices, mut atlas) in &mut qa {
-                atlas.index = if atlas.index == indices.last {
-                    indices.first
-                } else {
-                    atlas.index + 1
-                };
-            }
+
+        if keyboard_input.pressed(KeyCode::KeyA) {
+            t.translation.x -= 8.;
+            let mut atlas = q_atlas.single_mut();
+           
+            atlas.index = if atlas.index > 26 || atlas.index < 24 {
+                24
+            } else {
+                atlas.index + 1
+            };
+        }
+
+        if keyboard_input.pressed(KeyCode::KeyW) {
+            t.translation.y += 8.;
+            let mut atlas = q_atlas.single_mut();
+           
+            atlas.index = if atlas.index > 18 || atlas.index < 16 {
+                16
+            } else {
+                atlas.index + 1
+            };
+        }
+
+        if keyboard_input.pressed(KeyCode::KeyS) {
+            t.translation.y -= 8.;
+            let mut atlas = q_atlas.single_mut();
+           
+            atlas.index = if atlas.index > 2  {
+                0
+            } else {
+                atlas.index + 1
+            };
         }
     }
