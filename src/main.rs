@@ -46,6 +46,8 @@ struct AnimationTimer(Timer);
 
 #[derive(Component)]
 struct Player;
+#[derive(Component)]
+struct Speed {walking: f32, sprinting: f32}
 
 fn main() {
     App::new()
@@ -74,6 +76,33 @@ fn main() {
         .add_event::<ControlPlayerEvent>()
         .run();
 }
+#[derive(Eq, PartialEq, Hash)]
+enum Direction {
+    North,
+    Northeast,
+    East,
+    Southeast,
+    South,
+    Southwest,
+    West,
+    Northwest,
+}
+
+enum PlayerAction {
+    Walk {direction : usize},
+    Sprint {direction : usize},
+    Attack,
+}
+
+struct player_movement{
+    translation: Vec3,
+    first_index: usize,
+    last_index: usize,
+}
+
+#[derive(Component)]
+struct PlayerMovements {movements: Vec<player_movement>}
+
 fn initialize(mut commands: Commands,
               asset_server: Res<AssetServer>,
               mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
@@ -93,6 +122,17 @@ fn initialize(mut commands: Commands,
     let layout = TextureAtlasLayout::from_grid(Vec2::splat(52.), 4, 8, None, None);    
     let texture_atlas_layout = texture_atlas_layouts.add(layout);
 //    let animation_indices = AnimationIndices { first: 7, last: 10 };
+
+    let mut player_movements = Vec::new();
+    player_movements.push(player_movement {translation: Vec3::Y, first_index: 16, last_index: 19});      // North
+    player_movements.push(player_movement {translation: (Vec3::Y + Vec3::X)/((2 as f32).sqrt()), first_index: 12, last_index: 15}); // Northeast  
+    player_movements.push(player_movement {translation: Vec3::X, first_index: 8, last_index: 11});       // East
+    player_movements.push(player_movement {translation: (Vec3::X - Vec3::Y)/((2 as f32).sqrt()), first_index: 4, last_index: 7}); // Southeast    
+    player_movements.push(player_movement {translation: Vec3::NEG_Y, first_index: 0, last_index: 3});        // South
+    player_movements.push(player_movement {translation: (Vec3::NEG_X + Vec3::NEG_Y)/((2 as f32).sqrt()), first_index: 28, last_index: 31}); // Southwest   
+    player_movements.push(player_movement {translation: Vec3::NEG_X, first_index: 24, last_index: 27});      // West
+    player_movements.push(player_movement {translation: (Vec3::NEG_X + Vec3::Y)/((2 as f32).sqrt()), first_index: 20, last_index: 23}); // Northwest 
+    
     commands.spawn((SpriteSheetBundle {
         texture: texture.clone(),
         transform: Transform::from_scale(Vec3::splat(2.0)),
@@ -100,6 +140,8 @@ fn initialize(mut commands: Commands,
         ..default()
         },
         AnimationTimer(Timer::from_seconds(0.1, TimerMode::Repeating)),
+        PlayerMovements{movements: player_movements},
+        Speed{walking: 8.0, sprinting: 16.},
         Player,
     ));
 }
@@ -144,10 +186,10 @@ fn spawn_tiles(mut commands: Commands, asset_server: Res<AssetServer>,
 
 }
 
-fn add_walls(mut commands: Commands,mut grid_q: Query<&mut Tilemap>,
+fn add_walls(grid_q: Query<&mut Tilemap>,
              mut tiles_q: Query<&mut TextureAtlas>) {
      info!("Adding walls");
-    let mut grid = grid_q.get_single_mut().unwrap();
+    let grid = grid_q.get_single().unwrap();
 
  // Top and bottom edges
     for i in 0..grid.width {
@@ -170,14 +212,13 @@ fn add_walls(mut commands: Commands,mut grid_q: Query<&mut Tilemap>,
 
 }
 
-fn add_ore(mut commands: Commands,
-//           mut q: Query<(Entity, &mut TextureAtlas, &mut TilePosition)>,
+fn add_ore(
             mut q: Query<&mut TextureAtlas>,
             mut grid_q: Query<&mut Tilemap>,
         ) {
 
     info!("Adding ore");
-    let mut grid = grid_q.get_single_mut().unwrap();
+    let grid = grid_q.get_single().unwrap();
     let chosen_pos = TilePosition {x: fastrand::usize(1..grid.width-2), y: fastrand::usize(1..grid.height-2)};
 
     let e = grid.tile[chosen_pos.y*grid.width + chosen_pos.x].unwrap();
@@ -189,101 +230,79 @@ fn add_ore(mut commands: Commands,
 
 // Abstractions for player movement
 
-enum Direction {
-    North,
-    Northeast,
-    East,
-    Southeast,
-    South,
-    Southwest,
-    West,
-    Northwest,
-}
-
-enum PlayerAction {
-    Walk {direction : Direction},
-    Sprint {direction : Direction},
-    Attack,
-}
-
 #[derive(Event)]
 struct ControlPlayerEvent(PlayerAction);
+
+// Collect play input by polling keypresses. Check first for WASD key combinations, then single WASD directions
 
 fn player_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut ev_control_player: EventWriter<ControlPlayerEvent>,
-) {
-    if keyboard_input.pressed(KeyCode::KeyW) {
-        ev_control_player.send(ControlPlayerEvent(PlayerAction::Walk {direction : Direction::North}));
+    ) { 
+    let direction = 'block: {
+        if keyboard_input.pressed(KeyCode::KeyW) {
+            if keyboard_input.pressed(KeyCode::KeyA) {
+                break 'block Some(7); // Northwest
+            }
+            if keyboard_input.pressed(KeyCode::KeyD) {
+                break 'block Some(1); // Northeast
+            }
+                break 'block Some(0); // North
+        }
+        if keyboard_input.pressed(KeyCode::KeyS) {
+            if keyboard_input.pressed(KeyCode::KeyA) {
+                break 'block Some(5); // Southwest
+            }
+            if keyboard_input.pressed(KeyCode::KeyD) {
+                break 'block Some(3); // Southeast
+            }
+            break 'block Some(4); // South
+        }
+        if keyboard_input.pressed(KeyCode::KeyA) {
+            break 'block Some(6); // West
+        }
+        if keyboard_input.pressed(KeyCode::KeyD) {
+            break 'block Some(2); // East
+        }
+        None
+    };
+    if let Some(dir) = direction {
+        if keyboard_input.pressed(KeyCode::ShiftLeft) {
+            ev_control_player.send(ControlPlayerEvent(PlayerAction::Sprint {direction : dir}));
+        } else {
+            ev_control_player.send(ControlPlayerEvent(PlayerAction::Walk {direction : dir}));
+            }  
     }
-    if keyboard_input.pressed(KeyCode::KeyD) {
-        ev_control_player.send(ControlPlayerEvent(PlayerAction::Walk {direction : Direction::East}));
-    }
-    if keyboard_input.pressed(KeyCode::KeyS) {
-        ev_control_player.send(ControlPlayerEvent(PlayerAction::Walk {direction : Direction::South}));
-    }
-    if keyboard_input.pressed(KeyCode::KeyA) {
-        ev_control_player.send(ControlPlayerEvent(PlayerAction::Walk {direction : Direction::West}));
-    }
-}
+}   
 
 fn move_player(
     mut ev_control_player: EventReader<ControlPlayerEvent>,
-    mut q: Query<&mut Transform, With<Player>>,
+    mut q: Query<(&mut Transform, &Speed, &PlayerMovements), With<Player>>,
     mut q_atlas: Query <&mut TextureAtlas, With<Player>>,
     ) {
-        let mut t = q.get_single_mut().unwrap();
+    let (mut t, speed, m) = q.get_single_mut().unwrap();
 
-        for ev in ev_control_player.read() {
-            match &ev.0 {
-                PlayerAction::Walk {direction} => {
-                    match direction {
-                        Direction::North => {
-                            t.translation.y += 8.;
-                            let mut atlas = q_atlas.single_mut();
-                           
-                            atlas.index = if atlas.index > 18 || atlas.index < 16 {
-                                16
-                            } else {
-                                atlas.index + 1
-                            };
-                        }
-                        Direction::Northeast => todo!(),
-                        Direction::East => {
-                            t.translation.x += 8.;
-                            let mut atlas = q_atlas.single_mut();
-                            atlas.index = if atlas.index > 11 || atlas.index < 8{
-                                8
-                            } else {
-                                atlas.index + 1
-                            }
-                        }
-                        Direction::Southeast => todo!(),
-                        Direction::South => {
-                            t.translation.y -= 8.;
-                            let mut atlas = q_atlas.single_mut();
-                        
-                            atlas.index = if atlas.index > 2  {
-                                0
-                            } else {
-                                atlas.index + 1
-                            }
-                        }
-                        Direction::Southwest => todo!(),
-                        Direction::West => {
-                            t.translation.x -= 8.;
-                            let mut atlas = q_atlas.single_mut();
-                           
-                            atlas.index = if atlas.index > 26 || atlas.index < 24 {
-                                24
-                            } else {
-                                atlas.index + 1
-                            };
-                        }
-                        Direction::Northwest => todo!(),
-                    }   
-                }
-                PlayerAction::Sprint { .. } | PlayerAction::Attack => todo!()
-            }
+    for ev in ev_control_player.read() {
+        match &ev.0 {
+            PlayerAction::Walk {direction} => {
+                t.translation += m.movements[*direction].translation * speed.walking;
+                let mut atlas = q_atlas.single_mut();
+                atlas.index = if atlas.index >= m.movements[*direction].last_index || atlas.index < m.movements[*direction].first_index {
+                    m.movements[*direction].first_index
+                } else {
+                    atlas.index + 1
+                };
+            }                    
+            PlayerAction::Sprint {direction} => {
+                t.translation += m.movements[*direction].translation * speed.sprinting;
+                let mut atlas = q_atlas.single_mut();
+                atlas.index = if atlas.index >= m.movements[*direction].last_index || atlas.index < m.movements[*direction].first_index {
+                    m.movements[*direction].first_index
+                } else {
+                    atlas.index + 1
+                };
+            }          
+            PlayerAction::Attack => todo!()
         }
     }
+}
