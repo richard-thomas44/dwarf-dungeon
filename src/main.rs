@@ -67,9 +67,11 @@ fn main() {
 
         ))
         .add_systems(FixedUpdate,(
+            player_input,
             move_player,
-        ))
+        ).chain())
         .insert_resource(Time::<Fixed>::from_hz(15.))
+        .add_event::<ControlPlayerEvent>()
         .run();
 }
 fn initialize(mut commands: Commands,
@@ -187,52 +189,121 @@ fn add_ore(mut commands: Commands,
     };
 }
 
+// Abstractions for player movement
+
+enum Direction {
+    North,
+    Northeast,
+    East,
+    Southeast,
+    South,
+    Southwest,
+    West,
+    Northwest,
+}
+
+enum PlayerAction {
+    Walk {direction : Direction},
+    Sprint {direction : Direction},
+    Attack,
+}
+
+#[derive(Event)]
+struct ControlPlayerEvent(PlayerAction);
+
+fn player_input(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut ev_control_player: EventWriter<ControlPlayerEvent>,
+) {
+    if keyboard_input.pressed(KeyCode::KeyW) {
+        ev_control_player.send(ControlPlayerEvent(PlayerAction::Walk {direction : Direction::North}));
+    }
+    if keyboard_input.pressed(KeyCode::KeyD) {
+        ev_control_player.send(ControlPlayerEvent(PlayerAction::Walk {direction : Direction::East}));
+    }
+    if keyboard_input.pressed(KeyCode::KeyS) {
+        ev_control_player.send(ControlPlayerEvent(PlayerAction::Walk {direction : Direction::South}));
+    }
+    if keyboard_input.pressed(KeyCode::KeyA) {
+        ev_control_player.send(ControlPlayerEvent(PlayerAction::Walk {direction : Direction::West}));
+    }
+}
+
 fn move_player(
+    mut ev_control_player: EventReader<ControlPlayerEvent>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut q: Query<&mut Transform, With<Player>>,
     mut q_atlas: Query <&mut TextureAtlas, With<Player>>,
     ) {
         let mut t = q.get_single_mut().unwrap();
-        if keyboard_input.pressed(KeyCode::KeyD) {
-            t.translation.x += 8.;
-            let mut atlas = q_atlas.single_mut();
-            atlas.index = if atlas.index > 11 || atlas.index < 8{
-                8
-            } else {
-                atlas.index + 1
-            };
-        }
 
-        if keyboard_input.pressed(KeyCode::KeyA) {
-            t.translation.x -= 8.;
-            let mut atlas = q_atlas.single_mut();
-           
-            atlas.index = if atlas.index > 26 || atlas.index < 24 {
-                24
-            } else {
-                atlas.index + 1
-            };
-        }
-
-        if keyboard_input.pressed(KeyCode::KeyW) {
-            t.translation.y += 8.;
-            let mut atlas = q_atlas.single_mut();
-           
-            atlas.index = if atlas.index > 18 || atlas.index < 16 {
-                16
-            } else {
-                atlas.index + 1
-            };
-        }
-
-        if keyboard_input.pressed(KeyCode::KeyS) {
-            t.translation.y -= 8.;
-            let mut atlas = q_atlas.single_mut();
-           
-            atlas.index = if atlas.index > 2  {
-                0
-            } else {
-                atlas.index + 1
-            };
+        for ev in ev_control_player.read() {
+            match &ev.0 {
+                PlayerAction::Walk {direction} => {
+                    match direction {
+                        Direction::North => {
+                            t.translation.y += 8.;
+                            let mut atlas = q_atlas.single_mut();
+                           
+                            atlas.index = if atlas.index > 18 || atlas.index < 16 {
+                                16
+                            } else {
+                                atlas.index + 1
+                            };
+                        }
+                        Direction::Northeast => todo!(),
+                        Direction::East => {
+                            t.translation.x += 8.;
+                            let mut atlas = q_atlas.single_mut();
+                            atlas.index = if atlas.index > 11 || atlas.index < 8{
+                                8
+                            } else {
+                                atlas.index + 1
+                            }
+                        }
+                        Direction::Southeast => todo!(),
+                        Direction::South => {
+                            t.translation.y -= 8.;
+                            let mut atlas = q_atlas.single_mut();
+                        
+                            atlas.index = if atlas.index > 2  {
+                                0
+                            } else {
+                                atlas.index + 1
+                            }
+                        }
+                        Direction::Southwest => todo!(),
+                        Direction::West => {
+                            t.translation.x -= 8.;
+                            let mut atlas = q_atlas.single_mut();
+                           
+                            atlas.index = if atlas.index > 26 || atlas.index < 24 {
+                                24
+                            } else {
+                                atlas.index + 1
+                            };
+                        }
+                        Direction::Northwest => todo!(),
+                    }   
+                }
+                PlayerAction::Sprint { .. } | PlayerAction::Attack => todo!()
+            }
         }
     }
+/* 
+    fn animate_sprite(
+        time: Res<Time>,
+        mut query: Query<(&AnimationIndices, &mut AnimationTimer, &mut TextureAtlas)>,
+    ) {
+        for (indices, mut timer, mut atlas) in &mut query {
+            timer.tick(time.delta());
+            if timer.just_finished() {
+                atlas.index = if atlas.index == indices.last {
+                    indices.first
+                } else {
+                    atlas.index + 1
+                };
+            }
+        }
+    }
+    */
