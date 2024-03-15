@@ -1,4 +1,4 @@
-use bevy::{prelude::*, render::texture, utils::HashMap};
+use bevy::{prelude::*, utils::HashMap};
 
 struct TilemapSize {width: usize, height: usize}
 
@@ -99,7 +99,6 @@ fn initialize(mut commands: Commands,
         atlas: TextureAtlas {layout: texture_atlas_layout, index: 1},
         ..default()
         },
-//        animation_indices,
         AnimationTimer(Timer::from_seconds(0.1, TimerMode::Repeating)),
         Player,
     ));
@@ -135,7 +134,6 @@ fn spawn_tiles(mut commands: Commands, asset_server: Res<AssetServer>,
                                               (j as f32 - map_dimensions.map_size.height as f32/2.)*map_dimensions.tile_size*tile_scale, 1.)),
                 ..default()
                 }  ,
-//                TilePosition{x: i, y: j},
             )).id();
             grid.tile.push(Some(tile));
             let idx = grid.tile.len() -1;
@@ -231,7 +229,6 @@ fn player_input(
 
 fn move_player(
     mut ev_control_player: EventReader<ControlPlayerEvent>,
-    keyboard_input: Res<ButtonInput<KeyCode>>,
     mut q: Query<&mut Transform, With<Player>>,
     mut q_atlas: Query <&mut TextureAtlas, With<Player>>,
     ) {
@@ -290,20 +287,3 @@ fn move_player(
             }
         }
     }
-/* 
-    fn animate_sprite(
-        time: Res<Time>,
-        mut query: Query<(&AnimationIndices, &mut AnimationTimer, &mut TextureAtlas)>,
-    ) {
-        for (indices, mut timer, mut atlas) in &mut query {
-            timer.tick(time.delta());
-            if timer.just_finished() {
-                atlas.index = if atlas.index == indices.last {
-                    indices.first
-                } else {
-                    atlas.index + 1
-                };
-            }
-        }
-    }
-    */
