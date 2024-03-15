@@ -69,7 +69,7 @@ fn main() {
 
         ))
         .add_systems(FixedUpdate,(
-            player_input,
+            player_input2,
             move_player,
         ).chain())
         .insert_resource(Time::<Fixed>::from_hz(15.))
@@ -118,10 +118,8 @@ fn initialize(mut commands: Commands,
 // The hero spritesheet
 
     let texture: Handle<Image> = asset_server.load("images/Characters/Knight1_Move.png");
-//    let layout = TextureAtlasLayout::from_grid(Vec2::splat(24.), 4, 8, Some(Vec2::splat(28.)), None);
     let layout = TextureAtlasLayout::from_grid(Vec2::splat(52.), 4, 8, None, None);    
     let texture_atlas_layout = texture_atlas_layouts.add(layout);
-//    let animation_indices = AnimationIndices { first: 7, last: 10 };
 
     let mut player_movements = Vec::new();
     player_movements.push(player_movement {translation: Vec3::Y, first_index: 16, last_index: 19});      // North
@@ -232,6 +230,34 @@ fn add_ore(
 
 #[derive(Event)]
 struct ControlPlayerEvent(PlayerAction);
+
+fn player_input2(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut ev_control_player: EventWriter<ControlPlayerEvent>,
+    ) {
+    let keys : u8 = keyboard_input.pressed(KeyCode::KeyW) as u8
+                 | (keyboard_input.pressed(KeyCode::KeyA) as u8) << 1
+                 | (keyboard_input.pressed(KeyCode::KeyS) as u8) << 2
+                 | (keyboard_input.pressed(KeyCode::KeyD) as u8) << 3;
+
+    let dir = match keys {
+        0b0001 => 0,
+        0b1001 => 1,
+        0b1000 => 2,
+        0b1100 => 3,
+        0b0100 => 4,
+        0b0110 => 5,
+        0b0010 => 6,
+        0b0011 => 7,
+        _ => {return},
+    };
+    if keyboard_input.pressed(KeyCode::ShiftLeft) {
+        ev_control_player.send(ControlPlayerEvent(PlayerAction::Sprint {direction : dir}));
+    } else {
+        ev_control_player.send(ControlPlayerEvent(PlayerAction::Walk {direction : dir}));
+        }  
+}
+
 
 // Collect play input by polling keypresses. Check first for WASD key combinations, then single WASD directions
 
