@@ -76,32 +76,20 @@ fn main() {
         .add_event::<ControlPlayerEvent>()
         .run();
 }
-#[derive(Eq, PartialEq, Hash)]
-enum Direction {
-    North,
-    Northeast,
-    East,
-    Southeast,
-    South,
-    Southwest,
-    West,
-    Northwest,
-}
-
 enum PlayerAction {
     Walk {direction : usize},
     Sprint {direction : usize},
     Attack,
 }
 
-struct player_movement{
+struct PlayerMovement{
     translation: Vec3,
     first_index: usize,
     last_index: usize,
 }
 
 #[derive(Component)]
-struct PlayerMovements {movements: Vec<player_movement>}
+struct PlayerMovements {movements: Vec<PlayerMovement>}
 
 fn initialize(mut commands: Commands,
               asset_server: Res<AssetServer>,
@@ -122,14 +110,14 @@ fn initialize(mut commands: Commands,
     let texture_atlas_layout = texture_atlas_layouts.add(layout);
 
     let mut player_movements = Vec::new();
-    player_movements.push(player_movement {translation: Vec3::Y, first_index: 16, last_index: 19});      // North
-    player_movements.push(player_movement {translation: (Vec3::Y + Vec3::X)/((2 as f32).sqrt()), first_index: 12, last_index: 15}); // Northeast  
-    player_movements.push(player_movement {translation: Vec3::X, first_index: 8, last_index: 11});       // East
-    player_movements.push(player_movement {translation: (Vec3::X - Vec3::Y)/((2 as f32).sqrt()), first_index: 4, last_index: 7}); // Southeast    
-    player_movements.push(player_movement {translation: Vec3::NEG_Y, first_index: 0, last_index: 3});        // South
-    player_movements.push(player_movement {translation: (Vec3::NEG_X + Vec3::NEG_Y)/((2 as f32).sqrt()), first_index: 28, last_index: 31}); // Southwest   
-    player_movements.push(player_movement {translation: Vec3::NEG_X, first_index: 24, last_index: 27});      // West
-    player_movements.push(player_movement {translation: (Vec3::NEG_X + Vec3::Y)/((2 as f32).sqrt()), first_index: 20, last_index: 23}); // Northwest 
+    player_movements.push(PlayerMovement {translation: Vec3::Y, first_index: 16, last_index: 19});      // North
+    player_movements.push(PlayerMovement {translation: (Vec3::Y + Vec3::X)/((2 as f32).sqrt()), first_index: 12, last_index: 15}); // Northeast  
+    player_movements.push(PlayerMovement {translation: Vec3::X, first_index: 8, last_index: 11});       // East
+    player_movements.push(PlayerMovement {translation: (Vec3::X - Vec3::Y)/((2 as f32).sqrt()), first_index: 4, last_index: 7}); // Southeast    
+    player_movements.push(PlayerMovement {translation: Vec3::NEG_Y, first_index: 0, last_index: 3});        // South
+    player_movements.push(PlayerMovement {translation: (Vec3::NEG_X + Vec3::NEG_Y)/((2 as f32).sqrt()), first_index: 28, last_index: 31}); // Southwest   
+    player_movements.push(PlayerMovement {translation: Vec3::NEG_X, first_index: 24, last_index: 27});      // West
+    player_movements.push(PlayerMovement {translation: (Vec3::NEG_X + Vec3::Y)/((2 as f32).sqrt()), first_index: 20, last_index: 23}); // Northwest 
     
     commands.spawn((SpriteSheetBundle {
         texture: texture.clone(),
@@ -212,7 +200,7 @@ fn add_walls(grid_q: Query<&mut Tilemap>,
 
 fn add_ore(
             mut q: Query<&mut TextureAtlas>,
-            mut grid_q: Query<&mut Tilemap>,
+            grid_q: Query<&mut Tilemap>,
         ) {
 
     info!("Adding ore");
