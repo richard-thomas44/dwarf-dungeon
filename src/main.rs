@@ -65,22 +65,22 @@ fn main() {
         )          
         .add_systems(Update, (
             bevy::window::close_on_esc,
-//            animate_sprite,
-
+            animate_player,
+            (player_input2,
+            move_player).chain(),
         ))
-        .add_systems(FixedUpdate,(
-            player_input2,
-            move_player,
-        ).chain())
         .insert_resource(Time::<Fixed>::from_hz(15.))
         .add_event::<ControlPlayerEvent>()
         .run();
 }
 enum PlayerAction {
+    Stand {direction : usize},
     Walk {direction : usize},
     Sprint {direction : usize},
     Attack,
 }
+#[derive(Component)]
+struct PlayerStatus {action: PlayerAction}
 
 struct PlayerMovement{
     translation: Vec3,
@@ -90,6 +90,9 @@ struct PlayerMovement{
 
 #[derive(Component)]
 struct PlayerMovements {movements: Vec<PlayerMovement>}
+
+#[derive(Component)]
+struct FacingDirection{direction: usize}
 
 fn initialize(mut commands: Commands,
               asset_server: Res<AssetServer>,
@@ -128,6 +131,8 @@ fn initialize(mut commands: Commands,
         AnimationTimer(Timer::from_seconds(0.1, TimerMode::Repeating)),
         PlayerMovements{movements: player_movements},
         Speed{walking: 8.0, sprinting: 16.},
+        FacingDirection{direction: 0},
+        PlayerStatus{action : PlayerAction::Stand {direction:0} },
         Player,
     ));
 }
@@ -201,7 +206,7 @@ fn add_walls(grid_q: Query<&mut Tilemap>,
 fn add_ore(
             mut q: Query<&mut TextureAtlas>,
             grid_q: Query<&mut Tilemap>,
-        ) {
+) {
 
     info!("Adding ore");
     let grid = grid_q.get_single().unwrap();
@@ -237,7 +242,7 @@ fn player_input2(
         0b0110 => 5,
         0b0010 => 6,
         0b0011 => 7,
-        _ => {return},
+        _      => {return},
     };
     if keyboard_input.pressed(KeyCode::ShiftLeft) {
         ev_control_player.send(ControlPlayerEvent(PlayerAction::Sprint {direction : dir}));
@@ -246,13 +251,12 @@ fn player_input2(
         }  
 }
 
-
-// Collect play input by polling keypresses. Check first for WASD key combinations, then single WASD directions
+// Collect player input by polling keypresses. Check first for WASD key combinations, then single WASD directions
 
 fn player_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut ev_control_player: EventWriter<ControlPlayerEvent>,
-    ) { 
+) { 
     let direction = 'block: {
         if keyboard_input.pressed(KeyCode::KeyW) {
             if keyboard_input.pressed(KeyCode::KeyA) {
@@ -289,34 +293,54 @@ fn player_input(
     }
 }   
 
+// Move player in correct direction if a movement key is being pressed
+
 fn move_player(
     mut ev_control_player: EventReader<ControlPlayerEvent>,
-    mut q: Query<(&mut Transform, &Speed, &PlayerMovements), With<Player>>,
+    mut q: Query<(&mut PlayerStatus, &mut FacingDirection, &mut Transform, &Speed, &PlayerMovements, &mut AnimationTimer), With<Player>>,
     mut q_atlas: Query <&mut TextureAtlas, With<Player>>,
-    ) {
-    let (mut t, speed, m) = q.get_single_mut().unwrap();
+) {
+    let (mut status, mut facing, mut t, speed, m, mut timer) = q.get_single_mut().unwrap();
 
     for ev in ev_control_player.read() {
         match &ev.0 {
             PlayerAction::Walk {direction} => {
                 t.translation += m.movements[*direction].translation * speed.walking;
-                let mut atlas = q_atlas.single_mut();
-                atlas.index = if atlas.index >= m.movements[*direction].last_index || atlas.index < m.movements[*direction].first_index {
-                    m.movements[*direction].first_index
-                } else {
-                    atlas.index + 1
-                };
+                facing.direction = *direction;
+                status.action = PlayerAction::Walk { direction: *direction };
             }                    
             PlayerAction::Sprint {direction} => {
                 t.translation += m.movements[*direction].translation * speed.sprinting;
-                let mut atlas = q_atlas.single_mut();
-                atlas.index = if atlas.index >= m.movements[*direction].last_index || atlas.index < m.movements[*direction].first_index {
-                    m.movements[*direction].first_index
-                } else {
-                    atlas.index + 1
-                };
+                facing.direction = *direction;
+                status.action = PlayerAction::Sprint { direction: *direction };
             }          
-            PlayerAction::Attack => todo!()
+            PlayerAction::Attack => todo!(),
+            PlayerAction::Stand {direction}=> {},
+        }
+    }
+}
+
+// Iterate through player sprite sheet if player has pressed or held a key this tick
+
+fn animate_player(
+    mut ev_control_player: EventReader<ControlPlayerEvent>,
+    time: Res<Time>,
+    mut q: Query<(&PlayerMovements, &mut TextureAtlas, &mut AnimationTimer), With<Player>>,
+) {
+    let (m, mut atlas, mut timer) = q.get_single_mut().unwrap();
+    for ev in ev_control_player.read() {
+        match ev.0 {
+            PlayerAction::Walk {direction} | PlayerAction::Sprint {direction } => {
+                timer.tick(time.delta());
+                if timer.just_finished() {
+                    atlas.index = if atlas.index >= m.movements[direction].last_index || atlas.index < m.movements[direction].first_index {
+                        m.movements[direction].first_index
+                    } else {
+                        atlas.index + (timer.times_finished_this_tick() as usize % (m.movements[direction].last_index-m.movements[direction].first_index))
+                    };
+                }
+            },
+            _ => (),
         }
     }
 }
