@@ -35,6 +35,9 @@ impl TileType {
 #[derive(Component, Debug)]
 struct TilePosition {x: usize, y: usize}
 
+#[derive(Component, Debug)]
+pub struct Collider;
+
 pub fn build_map_plugin(app: &mut App) {
     info!("Setting map dimensions");
     app.insert_resource(MapDimensions {
@@ -104,27 +107,32 @@ fn spawn_tiles(mut commands: Commands, asset_server: Res<AssetServer>,
 }
 
 
-fn add_walls(grid_q: Query<&mut Tilemap>,
-             mut tiles_q: Query<&mut TextureAtlas>) {
+fn add_walls(mut commands: Commands,
+             grid_q: Query<&mut Tilemap>,
+             mut tiles_q: Query<(Entity, &mut TextureAtlas)>) {
      info!("Adding walls");
     let grid = grid_q.get_single().unwrap();
 
  // Top and bottom edges
     for i in 0..grid.width {
-        if let Ok(mut tile) = tiles_q.get_mut(grid.tile[i].unwrap()) { 
+        if let Ok((entity, mut tile)) = tiles_q.get_mut(grid.tile[i].unwrap()) { 
             tile.index = TileType::StoneCentre.value();
+            commands.entity(entity).insert(Collider);
         }
-        if let Ok(mut tile) = tiles_q.get_mut(grid.tile[(grid.height-1)*grid.width + i].unwrap()) {
+        if let Ok((entity,mut tile)) = tiles_q.get_mut(grid.tile[(grid.height-1)*grid.width + i].unwrap()) {
             tile.index = TileType::StoneCentre.value();
+            commands.entity(entity).insert(Collider);
         }
     }
 // Left and right edges
     for j in 1..grid.height-1 {
-        if let Ok(mut tile) = tiles_q.get_mut(grid.tile[grid.width*j].unwrap()) {
+        if let Ok((entity, mut tile)) = tiles_q.get_mut(grid.tile[grid.width*j].unwrap()) {
             tile.index = TileType::StoneCentre.value();
+            commands.entity(entity).insert(Collider);
         }
-        if let Ok(mut tile) = tiles_q.get_mut(grid.tile[grid.width*j + grid.width-1].unwrap()) {
+        if let Ok((entity, mut tile)) = tiles_q.get_mut(grid.tile[grid.width*j + grid.width-1].unwrap()) {
             tile.index = TileType::StoneCentre.value();
+            commands.entity(entity).insert(Collider);
         }
     }
 }

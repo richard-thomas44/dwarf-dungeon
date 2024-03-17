@@ -1,4 +1,5 @@
 use bevy::{input::InputSystem, prelude::*};
+use crate::build_map::Collider;
 
 #[derive(Component, Deref, DerefMut)]
 struct AnimationTimer(Timer);
@@ -89,27 +90,46 @@ pub struct ControlPlayerEvent(pub PlayerAction);
 // Move player in correct direction if a movement key is being pressed
 
 fn move_player(
+    time: Res<Time>,
     mut ev_control_player: EventReader<ControlPlayerEvent>,
     mut q: Query<(&mut PlayerStatus, &mut FacingDirection, &mut Transform, &Speed, &PlayerMovements), With<Player>>,
+    mut colliders: Query<(Entity, &Transform), (With<Collider>, Without<Player>)>,
 ) {
     let (mut status, mut facing, mut t, speed, m) = q.get_single_mut().unwrap();
 
     for ev in ev_control_player.read() {
+        let mut proposed_trans = t.translation;
         match &ev.0 {
             PlayerAction::Walk {direction} => {
-                t.translation += m.movements[*direction].translation * speed.walking;
+                proposed_trans += m.movements[*direction].translation * speed.walking * time.delta_seconds() * 30.;
                 facing.direction = *direction;
                 status.action = PlayerAction::Walk { direction: *direction };
             }                    
             PlayerAction::Sprint {direction} => {
-                t.translation += m.movements[*direction].translation * speed.sprinting;
+                proposed_trans += m.movements[*direction].translation * speed.sprinting * time.delta_seconds() * 30.;
                 facing.direction = *direction;
                 status.action = PlayerAction::Sprint { direction: *direction };
             }          
             PlayerAction::Attack => todo!(),
             PlayerAction::Stand {direction: _}=> {},
         }
+
+// Check for collisions
+        let mut collision_type = 0;
+        for (e, t) in colliders.iter() {
+//            info!("Checking against {:#?}", t.translation);
+            if t.translation.distance(proposed_trans) < 26.{            // Simply check distance. Not as good as checking overlapping bounding boxes
+//                info!("Collided with {:#?} at {:#?}", e, t);
+                collision_type = 1;
+            }
+        }
+        if collision_type == 0 {
+            t.translation = proposed_trans;
+        }
     }
+
+// TODO: start the animation immediately, do not just wait for the next animation timer tick
+
 }
 
 // Iterate through player sprite sheet if player has pressed or held a key this tick
