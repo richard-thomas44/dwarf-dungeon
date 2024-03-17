@@ -1,18 +1,18 @@
 use bevy::{prelude::*, utils::HashMap};
 
-pub struct TilemapSize {pub width: usize, pub height: usize}
+struct TilemapSize {width: usize, height: usize}
 #[derive(Component, Debug)]
-pub struct Tilemap {
-    pub tile: Vec<Option<Entity>>,
-    pub entity: HashMap<Entity, usize>,
-    pub width: usize,
-    pub height: usize,
+struct Tilemap {
+    tile: Vec<Option<Entity>>,
+    entity: HashMap<Entity, usize>,
+    width: usize,
+    height: usize,
 }
 
 #[derive(Resource)]
-pub struct MapDimensions {
-    pub map_size: TilemapSize,        // number of tiles width, height
-    pub tile_size: f32,               // size of each (square) tile in pixels
+struct MapDimensions {
+    map_size: TilemapSize,        // number of tiles width, height
+    tile_size: f32,               // size of each (square) tile in pixels
 }
 
 enum TileType {
@@ -42,13 +42,12 @@ pub fn build_map_plugin(app: &mut App) {
         tile_size: 16.,
     });
     app.add_systems(Startup,(
-        (
             initialize_map,
             spawn_tiles,
             add_walls,
             add_ore,
         ).chain()
-    ));
+    );
 }
 
 fn initialize_map(mut commands: Commands,
