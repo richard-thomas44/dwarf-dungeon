@@ -6,7 +6,7 @@ use crate::player::PlayerAction;
 pub fn input_control_plugin(app: &mut App) {
     app.add_systems(Update, (
         player_input2.in_set(InputSystem),
-        bevy::window::close_on_esc,
+        close_on_esc.in_set(InputSystem),       // close_on_esc was removed in 0.14
     ));
 }
 
@@ -37,44 +37,18 @@ fn player_input2(
         }  
 }
 
-// Collect player input by polling keypresses. Check first for WASD key combinations, then single WASD directions
+pub fn close_on_esc(
+    mut commands: Commands,
+    focused_windows: Query<(Entity, &Window)>,
+    input: Res<ButtonInput<KeyCode>>,
+) {
+    for (window, focus) in focused_windows.iter() {
+        if !focus.focused {
+            continue;
+        }
 
-fn player_input(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut ev_control_player: EventWriter<ControlPlayerEvent>,
-) { 
-    let direction = 'block: {
-        if keyboard_input.pressed(KeyCode::KeyW) {
-            if keyboard_input.pressed(KeyCode::KeyA) {
-                break 'block Some(7); // Northwest
-            }
-            if keyboard_input.pressed(KeyCode::KeyD) {
-                break 'block Some(1); // Northeast
-            }
-                break 'block Some(0); // North
+        if input.just_pressed(KeyCode::Escape) {
+            commands.entity(window).despawn();
         }
-        if keyboard_input.pressed(KeyCode::KeyS) {
-            if keyboard_input.pressed(KeyCode::KeyA) {
-                break 'block Some(5); // Southwest
-            }
-            if keyboard_input.pressed(KeyCode::KeyD) {
-                break 'block Some(3); // Southeast
-            }
-            break 'block Some(4); // South
-        }
-        if keyboard_input.pressed(KeyCode::KeyA) {
-            break 'block Some(6); // West
-        }
-        if keyboard_input.pressed(KeyCode::KeyD) {
-            break 'block Some(2); // East
-        }
-        None
-    };
-    if let Some(dir) = direction {
-        if keyboard_input.pressed(KeyCode::ShiftLeft) {
-            ev_control_player.send(ControlPlayerEvent(PlayerAction::Sprint {direction : dir}));
-        } else {
-            ev_control_player.send(ControlPlayerEvent(PlayerAction::Walk {direction : dir}));
-        }  
     }
-}   
+}

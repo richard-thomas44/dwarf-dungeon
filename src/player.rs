@@ -53,7 +53,7 @@ fn initialize_character(mut commands: Commands,
 // The hero spritesheet
 
     let texture: Handle<Image> = asset_server.load("images/Characters/Knight1_Move.png");
-    let layout = TextureAtlasLayout::from_grid(Vec2::splat(52.), 4, 8, None, None);    
+    let layout = TextureAtlasLayout::from_grid(UVec2::splat(52), 4, 8, None, None);    // Migration to 0.14 changed Vec2 to UVec2
     let texture_atlas_layout = texture_atlas_layouts.add(layout);
 
     let mut player_movements = Vec::new();
@@ -66,10 +66,12 @@ fn initialize_character(mut commands: Commands,
     player_movements.push(PlayerMovement {translation: Vec3::NEG_X, first_index: 24, last_index: 27});      // West
     player_movements.push(PlayerMovement {translation: (Vec3::NEG_X + Vec3::Y)/((2 as f32).sqrt()), first_index: 20, last_index: 23}); // Northwest 
     
-    commands.spawn((SpriteSheetBundle {
+    commands.spawn((SpriteBundle {
         texture: texture.clone(),
         transform: Transform::from_scale(Vec3::splat(2.0)),
-        atlas: TextureAtlas {layout: texture_atlas_layout, index: 1},
+        ..default()
+        },
+        TextureAtlas {layout: texture_atlas_layout, index: 1,
         ..default()
         },
         AnimationTimer(Timer::from_seconds(0.1, TimerMode::Repeating)),
@@ -93,7 +95,7 @@ fn move_player(
     time: Res<Time>,
     mut ev_control_player: EventReader<ControlPlayerEvent>,
     mut q: Query<(&mut PlayerStatus, &mut FacingDirection, &mut Transform, &Speed, &PlayerMovements), With<Player>>,
-    mut colliders: Query<(Entity, &Transform), (With<Collider>, Without<Player>)>,
+    colliders: Query<(Entity, &Transform), (With<Collider>, Without<Player>)>,
 ) {
     let (mut status, mut facing, mut t, speed, m) = q.get_single_mut().unwrap();
 
@@ -116,7 +118,7 @@ fn move_player(
 
 // Check for collisions
         let mut collision_type = 0;
-        for (e, t) in colliders.iter() {
+        for (_e, t) in colliders.iter() {
 //            info!("Checking against {:#?}", t.translation);
             if t.translation.distance(proposed_trans) < 26.{            // Simply check distance. Not as good as checking overlapping bounding boxes
 //                info!("Collided with {:#?} at {:#?}", e, t);

@@ -1,4 +1,4 @@
-use bevy::{input::InputSystem, prelude::*};
+use bevy::{prelude::*};
 use build_map::build_map_plugin;
 use input_control::input_control_plugin;
 use player::player_plugin;

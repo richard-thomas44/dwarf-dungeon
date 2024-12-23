@@ -12,7 +12,7 @@ struct Tilemap {
 #[derive(Resource)]
 struct MapDimensions {
     map_size: TilemapSize,        // number of tiles width, height
-    tile_size: f32,               // size of each (square) tile in pixels
+    tile_size: u32,               // size of each (square) tile in pixels
 }
 
 enum TileType {
@@ -42,7 +42,7 @@ pub fn build_map_plugin(app: &mut App) {
     info!("Setting map dimensions");
     app.insert_resource(MapDimensions {
         map_size: TilemapSize {width: 40, height: 30},
-        tile_size: 16.,
+        tile_size: 16,
     });
     app.add_systems(Startup,(
             initialize_map,
@@ -73,7 +73,7 @@ fn spawn_tiles(mut commands: Commands, asset_server: Res<AssetServer>,
     ) {
     info!("Spawning tiles");
     let texture = asset_server.load("Cave_Tiles.png");
-    let tile_size: Vec2 = Vec2::splat(map_dimensions.tile_size);
+    let tile_size: UVec2 = UVec2::splat(map_dimensions.tile_size);
     let (columns,rows) = (16, 2);
     let layout = TextureAtlasLayout::from_grid(tile_size, columns, rows, None, None);
     let texture_atlas_layout = texture_atlas_layouts.add(layout);
@@ -88,14 +88,17 @@ fn spawn_tiles(mut commands: Commands, asset_server: Res<AssetServer>,
     for j in 0..map_dimensions.map_size.height {
         for i in 0..map_dimensions.map_size.width {
             let tile = commands.spawn((
-                SpriteSheetBundle {
+                SpriteBundle {
                 texture: texture.clone(),
-                atlas: TextureAtlas { layout: texture_atlas_layout.clone(), index: TileType::Blank.value() },
+//                atlas: TextureAtlas { layout: texture_atlas_layout.clone(), index: TileType::Blank.value() },
                 transform: Transform::from_scale(Vec3::splat(tile_scale))
-                .with_translation(Vec3::new( (i as f32 - map_dimensions.map_size.width as f32/2.) *map_dimensions.tile_size*tile_scale,
-                                            (j as f32 - map_dimensions.map_size.height as f32/2.)*map_dimensions.tile_size*tile_scale, 1.)),
+                .with_translation(Vec3::new( (i as f32 - map_dimensions.map_size.width as f32/2.) *map_dimensions.tile_size as f32*tile_scale,
+                                            (j as f32 - map_dimensions.map_size.height as f32/2.)*map_dimensions.tile_size as f32*tile_scale, 1.)),
                 ..default()
-                }  ,
+                },
+                TextureAtlas { layout: texture_atlas_layout.clone(), index: TileType::Blank.value(),
+                ..default()
+            },
             )).id();
             grid.tile.push(Some(tile));
             let idx = grid.tile.len() -1;
