@@ -66,14 +66,14 @@ fn initialize_character(mut commands: Commands,
     player_movements.push(PlayerMovement {translation: Vec3::NEG_X, first_index: 24, last_index: 27});      // West
     player_movements.push(PlayerMovement {translation: (Vec3::NEG_X + Vec3::Y)/((2 as f32).sqrt()), first_index: 20, last_index: 23}); // Northwest 
     
-    commands.spawn((SpriteBundle {
-        texture: texture.clone(),
-        transform: Transform::from_scale(Vec3::splat(2.0)),
+    commands.spawn((Sprite {
+        image: texture.clone(),
+        texture_atlas: Some(TextureAtlas {layout: texture_atlas_layout, index: 1,
+            ..default()
+            }),
         ..default()
         },
-        TextureAtlas {layout: texture_atlas_layout, index: 1,
-        ..default()
-        },
+        Transform::from_scale(Vec3::splat(2.0)),
         AnimationTimer(Timer::from_seconds(0.1, TimerMode::Repeating)),
         PlayerMovements{movements: player_movements},
         Speed{walking: 8.0, sprinting: 16.},
@@ -103,12 +103,12 @@ fn move_player(
         let mut proposed_trans = t.translation;
         match &ev.0 {
             PlayerAction::Walk {direction} => {
-                proposed_trans += m.movements[*direction].translation * speed.walking * time.delta_seconds() * 30.;
+                proposed_trans += m.movements[*direction].translation * speed.walking * time.delta_secs() * 30.;
                 facing.direction = *direction;
                 status.action = PlayerAction::Walk { direction: *direction };
             }                    
             PlayerAction::Sprint {direction} => {
-                proposed_trans += m.movements[*direction].translation * speed.sprinting * time.delta_seconds() * 30.;
+                proposed_trans += m.movements[*direction].translation * speed.sprinting * time.delta_secs() * 30.;
                 facing.direction = *direction;
                 status.action = PlayerAction::Sprint { direction: *direction };
             }          
@@ -139,18 +139,18 @@ fn move_player(
 fn animate_player(
     mut ev_control_player: EventReader<ControlPlayerEvent>,
     time: Res<Time>,
-    mut q: Query<(&PlayerMovements, &mut TextureAtlas, &mut AnimationTimer), With<Player>>,
+    mut q: Query<(&PlayerMovements, &mut Sprite, &mut AnimationTimer), With<Player>>,
 ) {
-    let (m, mut atlas, mut timer) = q.get_single_mut().unwrap();
+    let (m, mut sprite, mut timer) = q.get_single_mut().unwrap();
     for ev in ev_control_player.read() {
         match ev.0 {
             PlayerAction::Walk {direction} | PlayerAction::Sprint {direction } => {
                 timer.tick(time.delta());
                 if timer.just_finished() {
-                    atlas.index = if atlas.index >= m.movements[direction].last_index || atlas.index < m.movements[direction].first_index {
+                    sprite.texture_atlas.as_mut().unwrap().index = if sprite.texture_atlas.as_mut().unwrap().index >= m.movements[direction].last_index || sprite.texture_atlas.as_mut().unwrap().index < m.movements[direction].first_index {
                         m.movements[direction].first_index
                     } else {
-                        atlas.index + (timer.times_finished_this_tick() as usize % (m.movements[direction].last_index-m.movements[direction].first_index))
+                        sprite.texture_atlas.as_mut().unwrap().index + (timer.times_finished_this_tick() as usize % (m.movements[direction].last_index-m.movements[direction].first_index))
                     };
                 }
             },
