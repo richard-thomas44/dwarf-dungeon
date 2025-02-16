@@ -1,18 +1,21 @@
 use bevy::{prelude::*, utils::HashMap};
+use crate::{game_state::GameStateSet, apple::*};
 
-struct TilemapSize {width: usize, height: usize}
+pub struct TilemapSize {
+    pub width: usize,
+    pub height: usize}
 #[derive(Component, Debug)]
-struct Tilemap {
-    tile: Vec<Option<Entity>>,
-    entity: HashMap<Entity, usize>,
-    width: usize,
-    height: usize,
+pub struct Tilemap {
+    pub tile: Vec<Option<Entity>>,
+    pub entity: HashMap<Entity, usize>,
+    pub width: usize,
+    pub height: usize,
 }
 
 #[derive(Resource)]
-struct MapDimensions {
-    map_size: TilemapSize,        // number of tiles width, height
-    tile_size: u32,               // size of each (square) tile in pixels
+pub struct MapDimensions {
+    pub map_size: TilemapSize,        // number of tiles width, height
+    pub tile_size: u32,               // size of each (square) tile in pixels
 }
 
 enum TileType {
@@ -40,6 +43,8 @@ pub struct Collider;
 
 #[derive(Component, Debug)]
 pub struct Tile;                                    // Marker component for tile entities
+#[derive(Component, Debug)]
+pub struct Floor;                                   // Marker component for tiles which can support the player (i.e. with empty space above)
 
 pub fn build_map_plugin(app: &mut App) {
     info!("Setting map dimensions");
@@ -50,9 +55,11 @@ pub fn build_map_plugin(app: &mut App) {
     app.add_systems(Startup,(
             initialize_map,
             spawn_tiles,
+            spawn_apple,
             add_walls,
             add_ore,
         ).chain()
+        .in_set(GameStateSet::StartupSet)
     );
 }
 
@@ -88,9 +95,10 @@ fn spawn_tiles(mut commands: Commands, asset_server: Res<AssetServer>,
 
     let tile_scale = 1.5;
 
+// Spawn a full grid of Blank tiles, each tile with its own sprite. Push an entry into the grid Tilemap to provide lookup from coordinates
+// This pattern stays as close as possible to ECS by having every tile be an Entity with a sprite and transform
     for j in 0..map_dimensions.map_size.height {
         for i in 0..map_dimensions.map_size.width {
-
             let tile = commands.spawn((
                 Sprite {
                     image: texture.clone(),
@@ -102,7 +110,7 @@ fn spawn_tiles(mut commands: Commands, asset_server: Res<AssetServer>,
             Transform::from_scale(Vec3::splat(tile_scale))
                        .with_translation(Vec3::new( (i as f32 - map_dimensions.map_size.width as f32/2.) *map_dimensions.tile_size as f32*tile_scale,
                                                     (j as f32 - map_dimensions.map_size.height as f32/2.)*map_dimensions.tile_size as f32*tile_scale, 1.)),
-            Tile,
+            Tile,       // marker component
             )).id();
 
             grid.tile.push(Some(tile));
@@ -113,7 +121,6 @@ fn spawn_tiles(mut commands: Commands, asset_server: Res<AssetServer>,
     }
 
 }
-
 
 fn add_walls(mut commands: Commands,
              grid_q: Query<&mut Tilemap>,
@@ -130,7 +137,7 @@ fn add_walls(mut commands: Commands,
         }
         if let Ok((entity,mut tile)) = tiles_q.get_mut(grid.tile[(grid.height-1)*grid.width + i].unwrap()) {
             tile.texture_atlas.as_mut().unwrap().index = TileType::StoneCentre.value();
-            commands.entity(entity).insert(Collider);
+            commands.entity(entity).insert((Collider, Floor));
         }
     }
 // Left and right edges
@@ -144,6 +151,22 @@ fn add_walls(mut commands: Commands,
             commands.entity(entity).insert(Collider);
         }
     }
+ 
+// Central corridor
+for i in 0..grid.width {
+//ceiling
+    if let Ok((entity, mut tile)) = tiles_q.get_mut(grid.tile[20*grid.width + i].unwrap()) { 
+        tile.texture_atlas.as_mut().unwrap().index = TileType::StoneCentre.value();
+        commands.entity(entity).insert(Collider);
+    }
+//floor
+    if let Ok((entity,mut tile)) = tiles_q.get_mut(grid.tile[8*grid.width + i].unwrap()) {
+        tile.texture_atlas.as_mut().unwrap().index = TileType::StoneCentre.value();
+        commands.entity(entity).insert((Collider, Floor));
+    }
+}
+
+
 }
 
 fn add_ore(

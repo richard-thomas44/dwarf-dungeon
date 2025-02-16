@@ -1,5 +1,9 @@
+use bevy::pbr::RenderLightmaps;
 use bevy::{input::InputSystem, prelude::*};
 use crate::build_map::Collider;
+use crate::game_state::GameStateSet;
+use crate::physics::MotionState;
+use crate::input_control::Directions;
 
 #[derive(Component, Deref, DerefMut)]
 struct AnimationTimer(Timer);
@@ -12,25 +16,27 @@ struct Speed {walking: f32, sprinting: f32}
 pub fn player_plugin(app: &mut App) {
     app.add_systems(Startup, (
             initialize_character,
-        ))
+        ).in_set(GameStateSet::InGameSet))
         .add_systems(Update, (
-            move_player.after(InputSystem),
+            move_player2.after(InputSystem),
             animate_player,
-        ))
+        ).in_set(GameStateSet::InGameSet))  
         .insert_resource(Time::<Fixed>::from_hz(15.))
         .add_event::<ControlPlayerEvent>();
 }
 
 pub enum PlayerAction {
-    Stand {direction : usize},
-    Walk {direction : usize},
-    Sprint {direction : usize},
+    Stand {direction : Directions},
+    Walk {direction : Directions},
+    Sprint {direction : Directions},
+    Jump {direction: Directions},
     Attack,
 }
 #[derive(Component)]
 struct PlayerStatus {action: PlayerAction}
 
 struct PlayerMovement{
+    direction: Directions,
     translation: Vec3,
     first_index: usize,
     last_index: usize,
@@ -40,7 +46,7 @@ struct PlayerMovement{
 struct PlayerMovements {movements: Vec<PlayerMovement>}
 
 #[derive(Component)]
-struct FacingDirection{direction: usize}
+struct FacingDirection{direction: Directions}
 
 
 
@@ -57,14 +63,14 @@ fn initialize_character(mut commands: Commands,
     let texture_atlas_layout = texture_atlas_layouts.add(layout);
 
     let mut player_movements = Vec::new();
-    player_movements.push(PlayerMovement {translation: Vec3::Y, first_index: 16, last_index: 19});      // North
-    player_movements.push(PlayerMovement {translation: (Vec3::Y + Vec3::X)/((2 as f32).sqrt()), first_index: 12, last_index: 15}); // Northeast  
-    player_movements.push(PlayerMovement {translation: Vec3::X, first_index: 8, last_index: 11});       // East
-    player_movements.push(PlayerMovement {translation: (Vec3::X - Vec3::Y)/((2 as f32).sqrt()), first_index: 4, last_index: 7}); // Southeast    
-    player_movements.push(PlayerMovement {translation: Vec3::NEG_Y, first_index: 0, last_index: 3});        // South
-    player_movements.push(PlayerMovement {translation: (Vec3::NEG_X + Vec3::NEG_Y)/((2 as f32).sqrt()), first_index: 28, last_index: 31}); // Southwest   
-    player_movements.push(PlayerMovement {translation: Vec3::NEG_X, first_index: 24, last_index: 27});      // West
-    player_movements.push(PlayerMovement {translation: (Vec3::NEG_X + Vec3::Y)/((2 as f32).sqrt()), first_index: 20, last_index: 23}); // Northwest 
+    player_movements.push(PlayerMovement {direction: Directions::Up, translation: Vec3::Y, first_index: 16, last_index: 19});      
+    player_movements.push(PlayerMovement {direction: Directions::UpRight, translation: (Vec3::Y + Vec3::X)/((2 as f32).sqrt()), first_index: 12, last_index: 15}); 
+    player_movements.push(PlayerMovement {direction: Directions::Right, translation: Vec3::X, first_index: 8, last_index: 11});  
+    player_movements.push(PlayerMovement {direction: Directions::DownRight, translation: (Vec3::X - Vec3::Y)/((2 as f32).sqrt()), first_index: 4, last_index: 7}); 
+    player_movements.push(PlayerMovement {direction: Directions::Down, translation: Vec3::NEG_Y, first_index: 0, last_index: 3});
+    player_movements.push(PlayerMovement {direction: Directions::DownLeft, translation: (Vec3::NEG_X + Vec3::NEG_Y)/((2 as f32).sqrt()), first_index: 28, last_index: 31});  
+    player_movements.push(PlayerMovement {direction: Directions::Left, translation: Vec3::NEG_X, first_index: 24, last_index: 27});      // West
+    player_movements.push(PlayerMovement {direction: Directions::UpLeft ,translation: (Vec3::NEG_X + Vec3::Y)/((2 as f32).sqrt()), first_index: 20, last_index: 23});
     
     commands.spawn((Sprite {
         image: texture.clone(),
@@ -73,12 +79,14 @@ fn initialize_character(mut commands: Commands,
             }),
         ..default()
         },
-        Transform::from_scale(Vec3::splat(2.0)),
+        Transform::from_scale(Vec3::splat(3.0)),
         AnimationTimer(Timer::from_seconds(0.1, TimerMode::Repeating)),
         PlayerMovements{movements: player_movements},
+        MotionState{position: Vec3::new(-0. ,55., 1.), velocity: Vec3::Y*(0.), rotation: 0., grounded: false},
         Speed{walking: 8.0, sprinting: 16.},
-        FacingDirection{direction: 0},
-        PlayerStatus{action : PlayerAction::Stand {direction:0} },
+        FacingDirection{direction: Directions::Right},
+        PlayerStatus{action : PlayerAction::Stand {direction:Directions::Right} },
+
         Player,
     ));
 }
@@ -88,50 +96,44 @@ fn initialize_character(mut commands: Commands,
 #[derive(Event)]
 pub struct ControlPlayerEvent(pub PlayerAction);
 
-
-// Move player in correct direction if a movement key is being pressed
-
-fn move_player(
+// Adjust player velocity in response to control-input events. This doesn't actually move the player; that happens in physics()
+ 
+fn move_player2(
     time: Res<Time>,
     mut ev_control_player: EventReader<ControlPlayerEvent>,
-    mut q: Query<(&mut PlayerStatus, &mut FacingDirection, &mut Transform, &Speed, &PlayerMovements), With<Player>>,
-    colliders: Query<(Entity, &Transform), (With<Collider>, Without<Player>)>,
+    mut q: Query<(&mut PlayerStatus, &mut FacingDirection, &mut MotionState, &Speed, &PlayerMovements), With<Player>>,
 ) {
-    let (mut status, mut facing, mut t, speed, m) = q.get_single_mut().unwrap();
-
+    let (mut status, mut facing, mut motion, speed, m) = q.get_single_mut().unwrap();
+    let delta = motion.velocity * Vec3::X * 0.1;
+    if motion.grounded {
+        motion.velocity -= delta;                                     // damp horizontal motion so player slows down unless keys held
+    }
     for ev in ev_control_player.read() {
-        let mut proposed_trans = t.translation;
         match &ev.0 {
             PlayerAction::Walk {direction} => {
-                proposed_trans += m.movements[*direction].translation * speed.walking * time.delta_secs() * 30.;
-                facing.direction = *direction;
-                status.action = PlayerAction::Walk { direction: *direction };
-            }                    
+                if motion.grounded && (*direction == Directions::Left || *direction == Directions::Right) {
+                    motion.velocity += m.movements[*direction as usize].translation * speed.walking * time.delta_secs() * 300.;
+                    facing.direction = *direction;
+                    status.action = PlayerAction::Walk { direction: *direction };
+                }
+            }
             PlayerAction::Sprint {direction} => {
-                proposed_trans += m.movements[*direction].translation * speed.sprinting * time.delta_secs() * 30.;
-                facing.direction = *direction;
-                status.action = PlayerAction::Sprint { direction: *direction };
-            }          
+                if motion.grounded && (*direction == Directions::Left || *direction == Directions::Right) {
+                    motion.velocity += m.movements[*direction as usize].translation * speed.walking * time.delta_secs() * 600.;
+                    facing.direction = *direction;
+                    status.action = PlayerAction::Sprint { direction: *direction };
+                }
+            }
+            PlayerAction::Stand {direction: _}=> todo!(),
             PlayerAction::Attack => todo!(),
-            PlayerAction::Stand {direction: _}=> {},
-        }
-
-// Check for collisions
-        let mut collision_type = 0;
-        for (_e, t) in colliders.iter() {
-//            info!("Checking against {:#?}", t.translation);
-            if t.translation.distance(proposed_trans) < 26.{            // Simply check distance. Not as good as checking overlapping bounding boxes
-//                info!("Collided with {:#?} at {:#?}", e, t);
-                collision_type = 1;
+            PlayerAction::Jump {direction} => {
+                if motion.grounded {
+                    motion.velocity += Vec3::Y * 200.;
+                    motion.grounded = false;
+                }
             }
         }
-        if collision_type == 0 {
-            t.translation = proposed_trans;
-        }
     }
-
-// TODO: start the animation immediately, do not just wait for the next animation timer tick
-
 }
 
 // Iterate through player sprite sheet if player has pressed or held a key this tick
@@ -139,18 +141,18 @@ fn move_player(
 fn animate_player(
     mut ev_control_player: EventReader<ControlPlayerEvent>,
     time: Res<Time>,
-    mut q: Query<(&PlayerMovements, &mut Sprite, &mut AnimationTimer), With<Player>>,
+    mut q: Query<(&PlayerMovements, &mut Sprite, &mut AnimationTimer, &MotionState), With<Player>>,
 ) {
-    let (m, mut sprite, mut timer) = q.get_single_mut().unwrap();
+    let (m, mut sprite, mut timer, motion) = q.get_single_mut().unwrap();
     for ev in ev_control_player.read() {
         match ev.0 {
             PlayerAction::Walk {direction} | PlayerAction::Sprint {direction } => {
                 timer.tick(time.delta());
-                if timer.just_finished() {
-                    sprite.texture_atlas.as_mut().unwrap().index = if sprite.texture_atlas.as_mut().unwrap().index >= m.movements[direction].last_index || sprite.texture_atlas.as_mut().unwrap().index < m.movements[direction].first_index {
-                        m.movements[direction].first_index
+                if timer.just_finished() && motion.grounded {
+                    sprite.texture_atlas.as_mut().unwrap().index = if sprite.texture_atlas.as_mut().unwrap().index >= m.movements[direction as usize].last_index || sprite.texture_atlas.as_mut().unwrap().index < m.movements[direction as usize].first_index {
+                        m.movements[direction as usize].first_index
                     } else {
-                        sprite.texture_atlas.as_mut().unwrap().index + (timer.times_finished_this_tick() as usize % (m.movements[direction].last_index-m.movements[direction].first_index))
+                        sprite.texture_atlas.as_mut().unwrap().index + (timer.times_finished_this_tick() as usize % (m.movements[direction as usize].last_index-m.movements[direction as usize].first_index))
                     };
                 }
             },
